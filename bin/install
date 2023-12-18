@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+
+set -e
+set -o pipefail
+# set -x
+
+ASDF_INSTALL_TYPE=${ASDF_INSTALL_TYPE:-version}
+[ -n "$ASDF_INSTALL_VERSION" ] || (>&2 echo 'Missing ASDF_INSTALL_VERSION' && exit 1)
+[ -n "$ASDF_INSTALL_PATH" ] || (>&2 echo 'Missing ASDF_INSTALL_PATH' && exit 1)
+
+install_plugin() {
+  local install_type=$1
+  local version=$2
+  local install_path=$3
+  local download_url="$(get_download_url $install_type $version)"
+  local tmp_download_file=$(mktemp)
+
+  local bin_install_path="$install_path/bin"
+  mkdir -p "${bin_install_path}"
+
+  echo "Downloading sd from $download_url"
+  curl -L -s "$download_url" -o "$tmp_download_file"
+  pushd $bin_install_path > /dev/null
+  tar zxf "$tmp_download_file" || exit 1
+  mv sd-*/sd ./
+  popd > /dev/null
+}
+
+get_platform() {
+  local unameOut="$(uname -s)"
+  case "${unameOut}" in
+    Linux*)     echo "linux";;
+    Darwin*)    echo "mac";;
+    CYGWIN*)    echo "win";;
+    MINGW*)     echo "win";;
+    *)          echo "unknown"
+  esac
+  if [ "$unameOut" == "CYGWIN*" ] || [ "$unameOut" == "MINGW*" ]; then
+    echo "Windows is not supported" >&2
+    exit 1
+  fi
+}
+
+get_arch() {
+  local arch=$(uname -m)
+  case $arch in
+    amd64 | x86_64)
+      echo "x86_64"
+      ;;
+    arm64 | aarch64)
+      echo "arm64"
+      ;;
+    arm)
+      echo "arm"
+      ;;
+    *)
+      echo "i386 is not supported" >&2
+      exit 1
+  esac
+}
+
+get_download_url() {
+  local install_type=$1
+  local tag=$2
+  local version=$2
+
+  local platform=$(get_platform)
+  local arch=$(get_arch)
+  local extra=""
+
+  # platform and arch mapping
+  case $platform in
+    linux)
+      platform="unknown-linux"
+      ;;
+    mac)
+      platform="apple-darwin"
+      ;;
+    win)
+      platform="pc-windows"
+      ;;
+  esac
+
+  case $arch in
+    x86_64)
+      arch="x86_64"
+      ;;
+    arm64 | aarch64)
+      arch="aarch64"
+      ;;
+    arm)
+      arch="arm"
+      ;;
+    *)
+      arch="i386"
+  esac
+
+  # in case the version is in some other format such as FOOBAR.X.X.X
+  if [[ "$tag" =~ ^[0-9] ]]; then
+    tag="v${tag}"
+  fi
+
+  local file_extension="tar.gz"
+  if [ "$platform" == "pc-windows" ]; then
+    file_extension="zip"
+  fi
+
+  echo "https://github.com/chmln/sd/releases/download/${tag}/sd-${tag}-${arch}-${platform}.${file_extension}"
+}
+
+install_plugin "$ASDF_INSTALL_TYPE" "$ASDF_INSTALL_VERSION" "$ASDF_INSTALL_PATH"
