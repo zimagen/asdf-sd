@@ -71,7 +71,7 @@ get_download_url() {
   # platform and arch mapping
   case $platform in
     linux)
-      platform="unknown-linux"
+      platform="unknown-linux-gnu"
       ;;
     mac)
       platform="apple-darwin"
